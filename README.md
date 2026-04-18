@@ -14,6 +14,5 @@ Add in scripts
 Add in museum samples
 Conda environment
 
-Fraction of genome remaining
+
 Overlaps in bed file?
-Remove sequences with lots of Ns?

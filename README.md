@@ -16,3 +16,9 @@ Conda environment
 
 
 Overlaps in bed file?
+Clear files from previous runs
+
+Fixing spacing in output between Please report and input list. Also capitalisation is inconsistent
+
+Percentage sign in Percent of genome used
+

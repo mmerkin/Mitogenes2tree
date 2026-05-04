@@ -34,6 +34,7 @@ Alternatively, a conda environment containing all required packages is attached.
 git clone https://github.com/mmerkin/Mitogenes2tree.git
 cd Mitogenes2tree
 conda env create -f environment.yml
+conda activate mitogenes2tree
 ```
 ## Running
 

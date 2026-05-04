@@ -106,11 +106,11 @@ if $gatk; then
 final_path="$temp/$sample_name/${sample_name}.noclip.bam"
 else
 final_path="$output_path/bams/${sample_name}.bam"
-done
+fi
 
 bam clipOverlap --in "$temp/$sample_name/${sample_name}.dedup.bam" --out $final_path
 
-samtools index "$final_path.bam"
+samtools index "$final_path"
 
 all echo -e "Clipped overlaps\n"
 

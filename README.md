@@ -24,7 +24,7 @@ conda env create -f environment.yml
 ```
 ## Running
 
-A detailed description of how to generate the input files is provided here.
+A detailed description of how to generate the input files is provided [here](Instructions/Input_files.md)
 
 To run:
 

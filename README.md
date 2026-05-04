@@ -50,15 +50,7 @@ There are three optional filters that can be performed:
 
 ## To do:
 
-Add in scripts
-Add in museum samples
 Conda environment
 
 
-Overlaps in bed file?
 Clear files from previous runs
-
-Fixing spacing in output between Please report and input list. Also capitalisation is inconsistent
-
-Percentage sign in Percent of genome used
-

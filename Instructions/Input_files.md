@@ -41,7 +41,7 @@ asn2gb -i ${species}_mtDNA.sqn -o ${species}_mtDNA.gb
 Finally, run the script update_genbank.awk to produce the genbank file
 
 ```bash
-./update_genbank.awk $genus $species ${species}_mtDNA.gb > ${species}_mtDNA_updated.gb
+./bonus_scripts/update_genbank.awk $genus $species ${species}_mtDNA.gb > ${species}_mtDNA_updated.gb
 ```
 
 ### Visualisation
@@ -51,7 +51,7 @@ The genbank file can be visualised in R with chloroplot, which will come install
 ```bash
 R
 library(chloroplot)
-table <- PlotTab("Aglais_urticae_mtDNA_updated.gb", T)
+table <- PlotTab("species_mtDNA_updated.gb", T)
 PlotMitGenome(table, organelle_type = F)
 q()
 ```
@@ -67,8 +67,9 @@ There is a large gap on the right that corresponds to a large non-coding region 
 ### Relinearise sequence
 
 Once a new starting gene has been chosen, a new fasta file should be created using the gene sequence from the mitos2 nucleotide fasta output. Then, the script reorder_mtDNA.sh can be run
+
 ```bash
-bash reorder_mtDNA.sh ${species}_mtDNA.fa ${gene}.fa
+bash bonus_scripts/reorder_mtDNA.sh ${species}_mtDNA.fa ${gene}.fa
 ```
 
 ## Generate bed file
@@ -92,11 +93,29 @@ bwa-mem2 index ${species}_reordered_mtDNA.fa
 samtools faidx ${species}_reordered_mtDNA.fa
 picard CreateSequenceDictionary -R $i -O ${species}_reordered_mtDNA.dict
 ```
-Mapping can then be performed using the script map_modern_mem.sh. 
 
-However, museum samples require many additional steps of preprocessing, which are explained elsewhere.
+Mapping can then be performed using the script Map_reads_parallel.sh.
+
+The reads must all be found in the same folder and contain R1 and R2 in the forward and reverse read names.
+
+```bash
+bash bonus_scripts/Map_reads_parallel.sh ${species}_reordered_mtDNA.fa /path/to/reads /path/to/output/folder
+```
+Optionally, GATK can be used to realign around indels. To enable this, create a new conda environment containing gatk38 and replace the variables at the top of the script.
+
+
+Museum samples also require many additional steps of preprocessing. which are explained [here]([Instructions/Museum_samples.md](https://github.com/mmerkin/Mitogenes2tree/blob/main/Instructions/Museum_samples.md))
 
 ## Generate depth file (optional)
 
 A depth file can also be generated to filter low depth samples with the script create_depth_file.sh.
 
+```bash
+bash bonus_scripts/create_depth_file.sh $bedfile $output /path/to/bams/*.bam
+```
+
+If you do not wish to add depths, you must still provide the sample list file, which can be generated with ls:
+
+```bash
+ls /path/to/bams/*.bam > samples.txt
+```

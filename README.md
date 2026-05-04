@@ -4,6 +4,10 @@
 Image credit: Laura Jimenez Burney
 
 
+# Description
+
+Produce a tree of concatenated mitochondrial DNA genes from samples within the same species.
+
 # Getting started
 
 ## Requirements:

@@ -16,7 +16,7 @@ Image credit: Laura Jimenez Burney
 ```bash
 git clone X
 cd X
-conda create -f environment.yml
+conda env create -f environment.yml
 ```
 ## Running
 

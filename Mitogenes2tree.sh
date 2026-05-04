@@ -1,83 +1,184 @@
 #!/bin/bash
-# Usage: bash script.sh species reference depth_file
+# Usage: bash script.sh -r reference.fa -i /path/to/bams -o output_prefix -f depth.tsv
+set -euo pipefail
 
-species=$1 # e.g. B1_Cupido_minimus
-reference=$2 # e.g. Cupido_minimus_MIQ.fa
-depth_file=$3 # e.g. B1_all_mtDNA_depths.tsv
+# Set variables
 
-# Frequently changed variables
+log_file="logfile_mitogenes2tree.txt"
+: > "$log_file"
+reference=""
+annotation=""
+input_path=""
+output_prefix=""
+sample_file=""
+min_depth=""
+min_allele_depth=""
+allele_balance=""
 
-min_depth=3
-min_mean_depth=10
-allele_balance=0.2
+
+# Send EVERYTHING (stdout + stderr) to log file
+exec >> "$log_file" 2>&1
+set -x
 
 
-# File paths
+# Functions
 
-mito_dir=~/Velocity/mitochondria/$species/gene_sequences
-REF=~/Velocity/mitochondria/reference/reordered/$reference
-BED=~/Velocity/mitochondria/reference/annotation/$species.bed
-depth_path=~/Velocity/mitochondria/$species/qc/depths/$depth_file
-logfile=$mito_dir/${species}_call_mtDNA_gene_sequences.log
-consensus_dir=$mito_dir/consensus_genes
-concat_sequence=$mito_dir/${species}_mtDNA_all_genes_aligned.fa
-partition_file=$mito_dir/${species}_mtDNA_all_genes_partitions.nex
+show_help() {
+  echo "Usage: $0 -r <reference> -a <annotation> -i <input_path> -o <output_prefix> -f <sample_file> [-s 10] [-d 20] [-b 0.2]"
+  echo
+  echo "Options:"
+  echo "  -r    Mitochondrial reference genome (required)"
+  echo "  -a    Annotation bed file (required)"
+  echo "  -i    Path to bam files (required)"
+  echo "  -o    Output prefix (required)"
+  echo "  -f    File containing sample names (required) and depths (optional)"
+  echo "  -s    Minimum depth to keep sample (optional)"  
+  echo "  -d    Minimum mean depth for genotype call (optional)"  
+  echo "  -b    Maximum allele balance allowed for genotype call  (optional)"
+  echo "  -h    Show help message"
+}
 
-# Conda
+echo_t() {
+  printf "%b\n" "$1" > /dev/tty
+}
 
-conda=~/miniconda3/bin/
-mtDNA=mtDNA
-source $conda/activate $mtDNA
+print_banner() {
+clear > /dev/tty
+cat << 'EOF' > /dev/tty
+              __  __ ___ _____ ___   ____ _____ _   _ _____ ____  
+             |  \/  |_ _|_   _/ _ \ / ___| ____| \ | | ____/ ___| 
+             | |\/| || |  | || | | | |  _|  _| |  \| |  _| \___ \ 
+             | |  | || |  | || |_| | |_| | |___| |\  | |___ ___) |
+             |_|  |_|___| |_| \___/ \____|_____|_| \_|_____|____/ 
+                                                                  
 
-# Determine whether variables have remained unset
+                                     ____  
+                                    |___ \ 
+                                      __) |
+                                     / __/ 
+                                    |_____|
+                                           
 
-if [[ -z $species ]] || [[ -z $reference ]] || [[ -z $depth_file ]]; then
-echo "Usage: bash script.sh species reference depth_file"
-exit 1
+                            _____ ____  _____ _____ 
+                           |_   _|  _ \| ____| ____|
+                             | | | |_) |  _| |  _|  
+                             | | |  _ <| |___| |___ 
+                             |_| |_| \_\_____|_____|
+
+EOF
+}
+
+
+# Arguments
+
+while getopts "r:a:i:o:f:s:d:b:h" opt; do
+  case $opt in
+    r) reference="$OPTARG" ;;
+    a) annotation="$OPTARG" ;;
+    i) input_path="$OPTARG" ;;
+    o) output_prefix="$OPTARG" ;;
+    f) sample_file="$OPTARG" ;;
+    s) min_depth="$OPTARG" ;;
+    d) min_allele_depth="$OPTARG" ;;
+    b) allele_balance="$OPTARG" ;;
+    h)
+      show_help > /dev/tty
+      exit 0
+      ;;
+    \?)
+      echo_t "Invalid option: -$OPTARG"
+      show_help > /dev/tty
+      exit 1
+      ;;
+    :)
+      echo_t "Option -$OPTARG requires an argument."
+      show_help > /dev/tty
+      exit 1
+      ;;
+  esac
+done
+
+
+if [[ -z "$reference" || -z "$annotation" || -z "$input_path" || -z "$output_prefix" || -z "$sample_file" ]]; then
+  echo_t "ERROR: Missing required arguments"
+  show_help > /dev/tty
+  exit 1
 fi
 
-# Send errors to log file
+missing=()
+for cmd in bcftools bedtools samtools iqtree; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        missing+=("$cmd")
+    fi
+done
 
-exec 3>&1 1>"$logfile" 2>&1
-trap "echo 'ERROR: An error occurred during execution, check $logfile for details.' >&3" ERR
-trap '{ set +x; } 2>/dev/null; echo -n "[$(date -Is)]  "; set -x' DEBUG
-set -e
+if ((${#missing[@]} > 0)); then
+    echo "There are missing commands. Have you activated the conda environment?" >&3
+    exit 1
+fi
 
-printf "\n\n\n" | tee /dev/fd/3
-printf "Starting analysis...\n" | tee /dev/fd/3
 
-# CREATE OUTPUT DIRECTORIES
+# Start
 
-mkdir -p "$consensus_dir"
+print_banner
 
-# Select samples with high enough depth
+echo "Script started at $(date)"
+echo_t "Starting run of Mitogenes2tree\nPlease report any errors as an issue on github\n"
+echo_t "Reference: $reference"
+echo_t "Annotation file: $annotation"
+echo_t "Input path: $input_path"
+echo_t "Output prefix: $output_prefix"
+echo_t "Sample file: $sample_file"
+[[ -n "$min_depth" ]] && echo_t "Minimum sample depth: $min_depth"
+[[ -n "$min_allele_depth" ]] && echo_t "Minimum allele depth: $min_allele_depth"
+[[ -n "$allele_balance" ]] && echo_t "Maximum allele balance: $allele_balance"
+echo_t "\nBegin analysis"
 
-mapfile -t SAMPLES < <(awk -v min_dp="$min_mean_depth" 'NR>1 && $2 > min_dp {print $1}' "$depth_path")
+# Find samples
+
+mkdir -p ${output_prefix}_consensus
+
+
+cols=$(awk 'NR>1 {print NF; exit}' "$sample_file")
+
+if [[ -n "$min_depth" && "$cols" -lt 2 ]]; then
+  echo_t "ERROR: The sample file only contains one column. A 2-column tsv file is required to filter by sample depth with the -s option"
+  exit 1
+fi
+
+if [[ -z "$min_depth" ]]; then
+  mapfile -t SAMPLES < <(awk 'NR>1 {print $1}' "$sample_file")
+else
+  mapfile -t SAMPLES < <(awk -v min_dp="$min_depth" 'NR>1 && $2 > min_dp {print $1}' "$sample_file")
+fi
 
 retained=${#SAMPLES[@]}
-total=$(awk 'NR>1' "$depth_path" | wc -l)
+total=$(awk 'NR>1' "$sample_file" | wc -l)
 
-printf "Using %d samples out of %d\n" "$retained" "$total" | tee /dev/fd/3
+echo_t "Using $retained samples out of $total"
+
+for sample in "${SAMPLES[@]}"; do
+    sample_base=$(basename "$sample" .bam)
+    printf "sample_base='%s'\n" "$sample_base"
+done
 
 # Call variants
 
-printf "Calling variants...\n" | tee /dev/fd/3
-
 BAMS=""
 for sample in "${SAMPLES[@]}"; do
-    bam="$mito_dir/bams/${sample}.realn.bam"
+    bam="$input_path/$sample"
     if [ -f "$bam" ]; then
         BAMS="$BAMS $bam"
     fi
 done
 
 if [ -z "$BAMS" ]; then
-    printf "Error: No BAMs available for variant calling\n" | tee /dev/fd/3
+    echo_t "ERROR: No bam files available for variant calling"
     exit 1
 fi
 
 bcftools mpileup \
--f "$REF" \
+-f "$reference" \
 -q 20 -Q 20 \
 -a AD,DP \
 -Ou \
@@ -86,44 +187,37 @@ bcftools call \
 --ploidy 1 \
 -mv \
 -Oz \
--o "$mito_dir/${species}_mtDNA.raw.vcf.gz"
-bcftools index $mito_dir/${species}_mtDNA.raw.vcf.gz
+-o "mtDNA.raw.vcf.gz"
+bcftools index mtDNA.raw.vcf.gz
 
-echo "Filtering VCF to SNPs only..."
-bcftools view -v snps -Oz -o $mito_dir/${species}_mtDNA.snps.vcf.gz $mito_dir/${species}_mtDNA.raw.vcf.gz
-bcftools index $mito_dir/${species}_mtDNA.snps.vcf.gz
+# Remove indels
+bcftools view -v snps -Oz -o mtDNA.snps.vcf.gz mtDNA.raw.vcf.gz
+bcftools index mtDNA.snps.vcf.gz
 
-snp_count=$(bcftools view -H -v snps $mito_dir/${species}_mtDNA.snps.vcf.gz | wc -l)
-printf "Total SNPs: %d\n" "$snp_count" | tee /dev/fd/3
+snp_count=$(bcftools view -H -v snps mtDNA.snps.vcf.gz | wc -l)
+echo_t "Called $snp_count SNPs"
+
 
 # Mask sequences with low depth or high allele imbalance
 
-printf "Masking regions...\n" | tee /dev/fd/3
+total_masked=0
+processed_samples=0
 
 for sample in "${SAMPLES[@]}"; do
-BAM="$mito_dir/bams/${sample}.realn.bam"
-MASK="${consensus_dir}/${sample}_mask.bed"
+BAM="$input_path/$sample"
+sample_base=$(basename "$sample" .bam)
+MASK="${output_prefix}_consensus/${sample_base}_mask.bed"
 > "$MASK"
-samtools depth -aa "$BAM" | awk -v min_dp=$min_depth '{if($3<min_dp) print $1"\t"$2-1"\t"$2}' >> "$MASK"
 
-#bcftools query -f '%CHROM\t%POS[\t%AD]\n' -s "$sample" $mito_dir/${species}_mtDNA.snps.vcf.gz | \
-#awk -v thresh=$allele_balance -F'\t' '{
-#split($3, ad, ",")
-#ad_ref = ad[1]
-#ad_alt = ad[2]
-#total = ad_ref + ad_alt
-#if(total>0){
-#minor = (ad_ref < ad_alt) ? ad_ref : ad_alt
-#ab = minor / total
-#if(ab > thresh){
-#print $1"\t"($2-1)"\t"$2 # subtract 1 as bed file is 0-based
-#}
-#}
-#}' >> "$MASK"
+if [[ -n "${min_allele_depth:-}" ]]; then
+samtools depth -aa "$BAM" | awk -v min_dp="$min_allele_depth" '
+$3 < min_dp {
+print $1 "\t" ($2-1) "\t" $2
+}' >> "$MASK"
+fi
 
-
-
-bcftools query -f '%CHROM\t%POS[\t%GT][\t%AD]\n' -s "$sample" "$mito_dir/${species}_mtDNA.snps.vcf.gz" | \
+if [[ -n "${allele_balance:-}" ]]; then
+bcftools query -f '%CHROM\t%POS[\t%GT][\t%AD]\n' -s "$sample_base" "mtDNA.snps.vcf.gz" |
 awk -v thresh=$allele_balance -F'\t' '{
 gt = $3
 split($4, ad, ",")
@@ -143,56 +237,77 @@ print $1"\t"($2-1)"\t"$2  # BED: 0-based start, 1-based end
 }
 }
 }' >> "$MASK"
-
+fi  
+  
+if [[ -s "$MASK" ]]; then
+masked_sites=$(wc -l < "$MASK")
+else
+masked_sites=0
+fi
+echo "Sample $sample_base masked sites: $masked_sites"
+total_masked=$((total_masked + masked_sites))
+processed_samples=$((processed_samples + 1))
 sort -k1,1 -k2,2n -o "$MASK" "$MASK"
 done
 
 
+if [[ "$processed_samples" -gt 0 ]]; then
+avg_masked=$((total_masked / processed_samples))
+echo_t "Average masked sites per sample: $avg_masked"
+else
+echo_t "No samples processed"
+fi
+
+
+
 # Create consensus sequence and extract gene sequences
 
-printf "Creating per-gene consensus sequences...\n" | tee /dev/fd/3
-
 for sample in "${SAMPLES[@]}"; do
+sample_base=$(basename "$sample" .bam)
 bcftools consensus \
--f "$REF" \
--s "$sample" \
--m "${consensus_dir}/${sample}_mask.bed" \
-$mito_dir/${species}_mtDNA.snps.vcf.gz \
-> "${consensus_dir}/${sample}_full_mt_consensus.fasta"
+-f "$reference" \
+-s "$sample_base" \
+-m "${output_prefix}_consensus/${sample_base}_mask.bed" \
+mtDNA.snps.vcf.gz \
+> "${output_prefix}_consensus/${sample_base}_full_mt_consensus.fasta"
 
-bedtools getfasta -fi "${consensus_dir}/${sample}_full_mt_consensus.fasta" \
--bed "$BED" -nameOnly -fo - | \
-awk -v sample="$sample" 'BEGIN{RS=">"; ORS=""} NR>1 {
+bedtools getfasta -fi "${output_prefix}_consensus/${sample_base}_full_mt_consensus.fasta" \
+-bed "$annotation" -nameOnly -fo - | \
+awk -v sample="$sample_base" 'BEGIN{RS=">"; ORS=""} NR>1 {
 split($0, lines, "\n")
 gene = lines[1]
 seq = ""
 for(i=2;i<=length(lines);i++) seq = seq lines[i]
 print ">" sample "|" gene "\n" seq "\n"
-}' > "${consensus_dir}/${sample}_genes_consensus.fasta"
+}' > "${output_prefix}_consensus/${sample_base}_genes_consensus.fasta"
 done
 
 
-# CONCATENATE PER-GENE SEQUENCES AND CREATE PARTITION FILE
+# Create parition file and concatenated gene file
 
-printf "Concatenating sequences and building partition file...\n" | tee /dev/fd/3
+
+concat_sequence="${output_prefix}_all_sequences.fa"
+partition_file="${output_prefix}_partitions.nex"
 > "$concat_sequence"
 > "$partition_file"
 pos=1
 
 first_sample="${SAMPLES[0]}"  # Use first sample to get gene lengths
+first_sample=$(basename "$first_sample" .bam)
 
 # Read gene names from BED
 
 gene_list=()
 while read -r chrom start end gene; do
 gene_list+=("$gene")
-done < "$BED"
+done < "$annotation"
 
 # Initialize per-sample concatenated strings
 
 declare -A concat_seqs
 for sample in "${SAMPLES[@]}"; do
-concat_seqs[$sample]=""
+sample_base=$(basename "$sample" .bam)
+concat_seqs[$sample_base]=""
 done
 
 # Loop through genes
@@ -205,11 +320,11 @@ if ($0 ~ "^>" sample "\\|" gene "$") {found=1} else {found=0}
 next
 }
 found {seq=seq $0}
-END {print seq}' "${consensus_dir}/${first_sample}_genes_consensus.fasta")
+END {print seq}' "${output_prefix}_consensus/${first_sample}_genes_consensus.fasta")
 seq_len=$(echo -n "$seq" | tr -d '\n' | wc -c)
 
 if [ "$seq_len" -eq 0 ]; then
-echo "Warning: gene $gene sequence length is 0 in sample $first_sample"
+echo_t "Warning: gene $gene sequence length is 0 in sample $first_sample"
 exit 1
 fi
 
@@ -218,32 +333,106 @@ echo "DNA, $gene = $pos-$end_pos" >> "$partition_file"
 
 # Append sequences for all samples
 for sample in "${SAMPLES[@]}"; do
-gene_seq=$(awk -v sample="$sample" -v gene="$gene" '
+sample_base=$(basename "$sample" .bam)
+gene_seq=$(awk -v sample_base="$sample_base" -v gene="$gene" '
 BEGIN {found=0; seq=""}
 /^>/ {
 gsub(/^ +| +$/,"",$0)
-if ($0 ~ "^>" sample "\\|" gene "$") {found=1} else {found=0}
+if ($0 ~ "^>" sample_base "\\|" gene "$") {found=1} else {found=0}
 next
 }
 found {seq=seq $0}
-END {print seq}' "${consensus_dir}/${sample}_genes_consensus.fasta")
-concat_seqs[$sample]="${concat_seqs[$sample]}$gene_seq"
+END {print seq}' "${output_prefix}_consensus/${sample_base}_genes_consensus.fasta")
+concat_seqs[$sample_base]="${concat_seqs[$sample_base]}$gene_seq"
 done
 pos=$((end_pos + 1))
 done
 
 # Write concatenated fasta
 for sample in "${SAMPLES[@]}"; do
-echo ">$sample" >> "$concat_sequence"
-echo "${concat_seqs[$sample]}" >> "$concat_sequence"
+sample_base=$(basename "$sample" .bam)
+echo ">$sample_base" >> "$concat_sequence"
+echo "${concat_seqs[$sample_base]}" >> "$concat_sequence"
 done
-
-printf "Gene sequence calling completed.\n\n\n" | tee /dev/fd/3
 
 # Final sanity check
 
-ALN_LEN=$(grep -v '^>' "$concat_sequence" | head -n1 | tr -d '\n' | wc -c)
+ALN_LEN=$(awk '/^[^>]/ {print length($0); exit}' "$concat_sequence")
 LAST_PART=$(tail -n1 "$partition_file" | awk -F"=" '{print $2}' | tr -d ' ' | awk -F"-" '{print $2}')
 
-printf "Alignment length: $ALN_LEN\n" | tee /dev/fd/3
-printf "Last partition end: $LAST_PART\n" | tee /dev/fd/3
+if [ "$ALN_LEN" -ne "$LAST_PART" ]; then
+    echo_t "ERROR: alignment length ($ALN_LEN) does not match last partition end ($LAST_PART). Please report this bug."
+    exit 1
+fi
+
+GENOME_LEN=$(awk '!/^>/ {total += length($0)} END {print total}' "$reference")
+PERCENTAGE=$(awk -v u="$ALN_LEN" -v g="$GENOME_LEN" 'BEGIN {printf "%.2f", (u/g)*100}')
+
+echo_t "\nAlignment length: $ALN_LEN (${PERCENTAGE}% of genome used)"
+
+# Check Ns
+
+N_THRESHOLD=10
+OUTFILE="${output_prefix}_high_missing.tsv"
+
+: > "$OUTFILE"
+
+read AVG_N COUNT <<EOF
+$(awk -v thresh="$N_THRESHOLD" -v out="$OUTFILE" '
+BEGIN {
+  OFS="\t"
+  print "sample_id", "N_count" > out
+}
+
+/^>/ {
+  if (seqs > 0) {
+    total += n
+    if (n > thresh) {
+      print id, n >> out
+      count++
+    }
+  }
+  id = substr($0,2)
+  seqs++
+  n = 0
+  next
+}
+
+{
+  n += gsub(/[Nn]/, "&")
+}
+
+END {
+  total += n
+  if (n > thresh) {
+    print id, n >> out
+    count++
+  }
+
+  if (seqs > 0)
+    print total / seqs, count
+  else
+    print 0, 0
+}
+' "$concat_sequence")
+EOF
+
+echo_t "Average number of Ns: $AVG_N"
+
+if (( COUNT > 0 )); then
+  echo_t "WARNING: $COUNT samples found with more than $N_THRESHOLD missing sites."
+  echo_t "See $OUTFILE for details"
+fi
+
+
+# IQTree
+
+mkdir -p ${output_prefix}_tree
+
+iqtree3 -s "$concat_sequence" -p "$partition_file" -m MFP -bb 1000 -T AUTO -pre ${output_prefix}_tree/${output_prefix}_tree
+
+cp ${output_prefix}_tree/${output_prefix}_tree.treefile ${output_prefix}_tree.treefile
+
+echo_t "Run finished successfully. Find output tree in ${output_prefix}_tree.treefile"
+
+# End of script

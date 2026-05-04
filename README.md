@@ -15,11 +15,24 @@ Produce a tree of concatenated mitochondrial DNA genes from samples within the s
 - mitos bed file
 - bam file or fastq reads that are either paired end or merged (museum)
 
+## Dependencies
+
+The main script only requires the following tools:
+
+- bcftools
+- bedtools
+- samtools
+- iqtree
+
+However, the bonus scripts may require additional software, which are listed as a comment at the top.
+
+Alternatively, a conda environment containing all required packages is attached.
+
 ## Installing
 
 ```bash
-git clone X
-cd X
+git clone https://github.com/mmerkin/Mitogenes2tree.git
+cd Mitogenes2tree
 conda env create -f environment.yml
 ```
 ## Running

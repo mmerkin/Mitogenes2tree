@@ -7,9 +7,9 @@ Image credit: Laura Jimenez Burney
 # Getting started
 
 ## Requirements:
-reference genome 
-mitos bed file
-bam file or fastq reads that are either paired end or merged (museum)
+- reference genome 
+- mitos bed file
+- bam file or fastq reads that are either paired end or merged (museum)
 
 ## Installing
 

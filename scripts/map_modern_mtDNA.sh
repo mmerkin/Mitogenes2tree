@@ -5,6 +5,12 @@
 threads=32
 remove_temp=false
 
+gatk=false
+conda=~/miniconda3/bin/
+GATK38=GATK38
+mitogenes2tree=mitogenes2tree
+
+
 set -euo pipefail
 
 if [[ $# -ne 3 ]]; then
@@ -96,11 +102,43 @@ samtools index "$temp/$sample_name/${sample_name}.dedup.bam"
 
 all echo -e "Removed PCR duplicates"
 
-bam clipOverlap --in "$temp/$sample_name/${sample_name}.dedup.bam" --out "$output_path/bams/${sample_name}.bam"
+if $gatk; then
+final_path="$temp/$sample_name/${sample_name}.noclip.bam"
+else
+final_path="$output_path/bams/${sample_name}.bam"
+done
 
-samtools index "$output_path/bams/${sample_name}.bam"
+bam clipOverlap --in "$temp/$sample_name/${sample_name}.dedup.bam" --out $final_path
+
+samtools index "$final_path.bam"
 
 all echo -e "Clipped overlaps\n"
+
+if $gatk; then
+
+source $conda/activate $GATK38
+
+gatk3 \
+-T RealignerTargetCreator \
+-R $REF \
+-o "$temp/$sample_name/${sample_name}.intervals" \
+-I "$temp/$sample_name/${sample_name}.noclip.bam"
+
+gatk3 \
+-T IndelRealigner \
+-R $REF \
+-targetIntervals "$temp/$sample_name/${sample_name}.intervals" \
+-I "$temp/$sample_name/${sample_name}.noclip.bam" \
+-o "$output_path/bams/${sample_name}.bam"
+
+all echo -e "Realigned reads\n"
+
+conda deactivate
+
+source $conda/activate $mitogenes2tree
+
+fi
+
 
 if $remove_temp; then
 rm -r $temp

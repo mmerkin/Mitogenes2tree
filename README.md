@@ -48,9 +48,10 @@ There are three optional filters that can be performed:
 
 # Output files
 
-## To do:
-
-Conda environment
-
-
-Clear files from previous runs
+- Tree in newick format: "_tree.treefile"
+- Concatenated mitogene sequences: "_all_sequences.fa"
+- Consenus sequences folder containing the fasta gene sequences ("_genes_consensus.fasta"), the concatenated gene sequences ("_full_mt_consensus.fasta") and the bed files of positions masked during filtering ("_mask.bed")
+- Tree folder containing the extra outputs of iqtree
+- vcf files containing raw variants and with indels removed
+- A list of samples with a high number of Ns ("_high_missing.tsv")
+- log file ("logfile_mitogenes2tree.txt")

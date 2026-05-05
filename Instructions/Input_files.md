@@ -74,7 +74,7 @@ bash bonus_scripts/reorder_circular_gemome.sh ${species}_mtDNA.fa ${gene}.fa > $
 
 ## Generate bed file
 
-If the reference genome has been reordered, mitos2 needs to be run again on the new reference genome. However, a bed file should be creating instead of seq and nucleotide fasta. 
+If the reference genome has been reordered, mitos2 needs to be run again on the new reference genome. However, a bed file should be created instead of seq and nucleotide fasta. 
 
 The bed files should then be modified to extract just the first 4 columns and remove any tRNA anticodon sequences in brackets:
 ```bash

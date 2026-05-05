@@ -69,7 +69,7 @@ There is a large gap on the right that corresponds to a large non-coding region 
 Once a new starting gene has been chosen, a new fasta file should be created using the gene sequence from the mitos2 nucleotide fasta output. Then, the script reorder_mtDNA.sh can be run
 
 ```bash
-bash bonus_scripts/reorder_mtDNA.sh ${species}_mtDNA.fa ${gene}.fa
+bash bonus_scripts/reorder_circular_gemome.sh ${species}_mtDNA.fa ${gene}.fa > ${output}.fa
 ```
 
 ## Generate bed file

@@ -131,5 +131,3 @@ parallel --bar -j "$jobs" process_sample {} \
     --joblog "$output_path/parallel_joblog.txt"
 
 echo "All samples processed!"
-jobs=4
-remove_temp=false

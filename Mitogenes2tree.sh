@@ -1,11 +1,12 @@
 #!/bin/bash
+# Mitogenes2tree v1.1: read group update
 # Usage: bash script.sh -r reference.fa -i /path/to/bams -o output_prefix -f depth.tsv
 set -euo pipefail
 
 # Set variables
 
 log_file="logfile_mitogenes2tree.txt"
-: > "$log_file"
+> "$log_file"
 reference=""
 annotation=""
 input_path=""
@@ -165,11 +166,15 @@ done
 # Call variants
 
 BAMS=""
+> readgroup_map.txt
 for sample in "${SAMPLES[@]}"; do
     bam="$input_path/$sample"
     if [ -f "$bam" ]; then
         BAMS="$BAMS $bam"
     fi
+    sample_base=$(basename "$sample" .bam)
+    RG=$(samtools view -H $bam | grep '^@RG'| sed -n 's/.*SM:\([^[:space:]]*\).*/\1/p')
+    echo -e "$RG $sample_base" >> readgroup_map.txt
 done
 
 if [ -z "$BAMS" ]; then
@@ -180,6 +185,7 @@ fi
 bcftools mpileup \
 -f "$reference" \
 -q 20 -Q 20 \
+-G readgroup_map.txt \
 -a AD,DP \
 -Ou \
 $BAMS | \

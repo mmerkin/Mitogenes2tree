@@ -43,7 +43,7 @@ A detailed description of how to generate the input files is provided [here](Ins
 To run:
 
 ```bash
-bash mitogenes2tree.sh -r <reference> -a <annotation> -i <input_path> -o <output_prefix> -f <sample_file> [-s 10] [-d 20] [-b 0.2]"
+bash Mitogenes2tree.sh -r <reference> -a <annotation> -i <input_path> -o <output_prefix> -f <sample_file> [-s 10] [-d 20] [-b 0.2]"
 
 Parameters:
 -r    Mitochondrial reference genome (required)

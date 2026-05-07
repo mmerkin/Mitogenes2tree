@@ -1,10 +1,10 @@
 # Create input files for Mitogenes2tree
 
 Mitogenes2tree requires the following three inputs:
-- [Mitochondrial genome reference fasta file](https://github.com/mmerkin/Mitogenes2tree/blob/main/Visualisation/Visualisation_env.yml)
-- [Bed file with locations of each gene]()
-- [Bam file of sequencing reads mapped to the reference]()
-- [A list of sample names (required) and depths (optional)]()
+- [Mitochondrial genome reference fasta file](https://github.com/mmerkin/Mitogenes2tree/blob/main/Instructions/Input_files.md#generate-relinearised-mitochondrial-reference-sequence)
+- [Bed file with locations of each gene](https://github.com/mmerkin/Mitogenes2tree/blob/main/Instructions/Input_files.md#generate-bed-file)
+- [Bam file of sequencing reads mapped to the reference](https://github.com/mmerkin/Mitogenes2tree/blob/main/Instructions/Input_files.md#generate-bam-file-from-fastq-files)
+- [A list of sample names (required) and depths (optional)](https://github.com/mmerkin/Mitogenes2tree/blob/main/Instructions/Input_files.md#generate-sample-file)
 
 
 ## Generate relinearised mitochondrial reference sequence

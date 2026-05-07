@@ -1,4 +1,6 @@
+## Museum samples
 
+This section is a WIP. Briefly, museum samples should be collapsed to form a single merged set of reads and then mapped with bwa aln instead of mem2.
 
 It is recommended to first collapse paired end sequences with fastp:
 
@@ -24,3 +26,4 @@ fastp -m -A \
 2> "$output_path/qc/reports/${filetag}_fastp_report.txt"
 done
 ```
+The script Map_museum_reads.sh can then be run in a similar manner to map_reads_parallel.sh

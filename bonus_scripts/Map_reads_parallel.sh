@@ -36,7 +36,7 @@ for cmd in bwa-mem2 samtools bam parallel; do
 done
 
 if ((${#missing[@]} > 0)); then
-    echo "There are missing commands. Have you activated the conda environment?" >&3
+    echo "There are missing commands. Have you activated the conda environment?" >&2
     exit 1
 fi
 

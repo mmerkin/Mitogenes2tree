@@ -1,12 +1,15 @@
 #!/bin/bash
-# Mitogenes2tree v1.1: read group update
+# Haplophylo v1.2
 # Usage: bash script.sh -r reference.fa -i /path/to/bams -o output_prefix -f depth.tsv
 set -euo pipefail
 
 # Set variables
 
-log_file="logfile_mitogenes2tree.txt"
+log_file="logfile_haplophylo.txt"
 > "$log_file"
+BQ=20
+MQ=20
+N_THRESHOLD=20
 reference=""
 annotation=""
 input_path=""
@@ -19,8 +22,6 @@ allele_balance=""
 
 # Send EVERYTHING (stdout + stderr) to log file
 exec >> "$log_file" 2>&1
-set -x
-
 
 # Functions
 
@@ -35,37 +36,40 @@ show_help() {
   echo "  -f    File containing sample names (required) and depths (optional)"
   echo "  -s    Minimum depth to keep sample (optional)"  
   echo "  -d    Minimum mean depth for genotype call (optional)"  
-  echo "  -b    Maximum allele balance allowed for genotype call  (optional)"
+  echo "  -b    Maximum allele balance allowed for genotype call (optional)"
   echo "  -h    Show help message"
 }
 
-echo_t() {
-  printf "%b\n" "$1" > /dev/tty
+log() {
+    local msg="$1"
+    local dest="${2:-both}"
+
+    case "$dest" in
+        terminal)
+            echo -e "$msg" > /dev/tty
+            ;;
+        log)
+            echo -e "$msg" >> "$log_file"
+            ;;
+        both)
+            echo -e "$msg" > /dev/tty
+            echo -e "$msg" >> "$log_file"
+            ;;
+        *)
+            echo "Invalid log destination: $dest" >&2
+            ;;
+    esac
 }
 
 print_banner() {
 clear > /dev/tty
 cat << 'EOF' > /dev/tty
-              __  __ ___ _____ ___   ____ _____ _   _ _____ ____  
-             |  \/  |_ _|_   _/ _ \ / ___| ____| \ | | ____/ ___| 
-             | |\/| || |  | || | | | |  _|  _| |  \| |  _| \___ \ 
-             | |  | || |  | || |_| | |_| | |___| |\  | |___ ___) |
-             |_|  |_|___| |_| \___/ \____|_____|_| \_|_____|____/ 
+          _   _    _    ____  _     ___  ____  _   ___   ___     ___  
+         | | | |  / \  |  _ \| |   / _ \|  _ \| | | \ \ / / |   / _ \ 
+         | |_| | / _ \ | |_) | |  | | | | |_) | |_| |\ V /| |  | | | |
+         |  _  |/ ___ \|  __/| |__| |_| |  __/|  _  | | | | |__| |_| |
+         |_| |_/_/   \_\_|   |_____\___/|_|   |_| |_| |_| |_____\___/ 
                                                                   
-
-                                     ____  
-                                    |___ \ 
-                                      __) |
-                                     / __/ 
-                                    |_____|
-                                           
-
-                            _____ ____  _____ _____ 
-                           |_   _|  _ \| ____| ____|
-                             | | | |_) |  _| |  _|  
-                             | | |  _ <| |___| |___ 
-                             |_| |_| \_\_____|_____|
-
 EOF
 }
 
@@ -87,53 +91,62 @@ while getopts "r:a:i:o:f:s:d:b:h" opt; do
       exit 0
       ;;
     \?)
-      echo_t "Invalid option: -$OPTARG"
+      log "Invalid option: -$OPTARG"
       show_help > /dev/tty
       exit 1
       ;;
     :)
-      echo_t "Option -$OPTARG requires an argument."
+      log "Option -$OPTARG requires an argument"
       show_help > /dev/tty
       exit 1
       ;;
   esac
 done
 
+trap 'log "Command failed: $BASH_COMMAND" terminal' ERR
+
 
 if [[ -z "$reference" || -z "$annotation" || -z "$input_path" || -z "$output_prefix" || -z "$sample_file" ]]; then
-  echo_t "ERROR: Missing required arguments"
+  log "ERROR: Missing required arguments"
   show_help > /dev/tty
   exit 1
 fi
 
 missing=()
-for cmd in bcftools bedtools samtools iqtree; do
+for cmd in bcftools bedtools samtools iqtree snp-sites; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         missing+=("$cmd")
     fi
 done
 
 if ((${#missing[@]} > 0)); then
-    echo "There are missing commands. Have you activated the conda environment?" >&3
+    log "There are missing commands. Have you activated the conda environment?"
     exit 1
 fi
+
+
+run_cmd() {
+    local cmd="$*"
+    echo "$cmd" >> "$log_file"
+    eval "$cmd"
+}
 
 
 # Start
 
 print_banner
 
-echo "Script started at $(date)"
-echo_t "Starting run of Mitogenes2tree\nPlease report any errors as an issue on github\n"
-echo_t "Reference: $reference"
-echo_t "Annotation file: $annotation"
-echo_t "Input path: $input_path"
-echo_t "Output prefix: $output_prefix"
-echo_t "Sample file: $sample_file"
-[[ -n "$min_depth" ]] && echo_t "Minimum sample depth: $min_depth"
-[[ -n "$min_allele_depth" ]] && echo_t "Minimum allele depth: $min_allele_depth"
-[[ -n "$allele_balance" ]] && echo_t "Maximum allele balance: $allele_balance"
-echo_t "\nBegin analysis"
+log "Script started at $(date)" log
+log "Starting run of Mitogenes2tree\nPlease report any errors as an issue on github\n"
+log "Reference: $reference"
+log "Annotation file: $annotation"
+log "Input path: $input_path"
+log "Output prefix: $output_prefix"
+log "Sample file: $sample_file"
+[[ -n "$min_depth" ]] && log "Minimum sample depth: $min_depth"
+[[ -n "$min_allele_depth" ]] && log "Minimum allele depth: $min_allele_depth"
+[[ -n "$allele_balance" ]] && log "Maximum allele balance: $allele_balance"
+log "\nBegin analysis"
 
 # Find samples
 
@@ -143,7 +156,7 @@ mkdir -p ${output_prefix}_consensus
 cols=$(awk 'NR>1 {print NF; exit}' "$sample_file")
 
 if [[ -n "$min_depth" && "$cols" -lt 2 ]]; then
-  echo_t "ERROR: The sample file only contains one column. A 2-column tsv file is required to filter by sample depth with the -s option"
+  log "ERROR: The sample file only contains one column. A 2-column tsv file is required to filter by sample depth with the -s option"
   exit 1
 fi
 
@@ -156,7 +169,7 @@ fi
 retained=${#SAMPLES[@]}
 total=$(awk 'NR>1' "$sample_file" | wc -l)
 
-echo_t "Using $retained samples out of $total"
+log "Using $retained samples out of $total"
 
 for sample in "${SAMPLES[@]}"; do
     sample_base=$(basename "$sample" .bam)
@@ -164,6 +177,7 @@ for sample in "${SAMPLES[@]}"; do
 done
 
 # Call variants
+
 
 BAMS=""
 > readgroup_map.txt
@@ -178,13 +192,13 @@ for sample in "${SAMPLES[@]}"; do
 done
 
 if [ -z "$BAMS" ]; then
-    echo_t "ERROR: No bam files available for variant calling"
+    log "ERROR: No bam files available for variant calling"
     exit 1
 fi
 
-bcftools mpileup \
+run_cmd bcftools mpileup \
 -f "$reference" \
--q 20 -Q 20 \
+-q $MQ -Q $BQ \
 -G readgroup_map.txt \
 -a AD,DP \
 -Ou \
@@ -193,16 +207,19 @@ bcftools call \
 --ploidy 1 \
 -mv \
 -Oz \
--o "mtDNA.raw.vcf.gz"
-bcftools index mtDNA.raw.vcf.gz
+-o "variants.raw.vcf.gz"
+run_cmd bcftools index variants.raw.vcf.gz
 
 # Remove indels
-bcftools view -v snps -Oz -o mtDNA.snps.vcf.gz mtDNA.raw.vcf.gz
-bcftools index mtDNA.snps.vcf.gz
+run_cmd bcftools view -v snps -Oz -o variants.snps.vcf.gz variants.raw.vcf.gz
+run_cmd bcftools index variants.snps.vcf.gz
 
-snp_count=$(bcftools view -H -v snps mtDNA.snps.vcf.gz | wc -l)
-echo_t "Called $snp_count SNPs"
+snp_count=$(bcftools view -H variants.snps.vcf.gz | wc -l)
+log "Called $snp_count SNPs"
 
+# Make gene counts output file
+
+run_cmd bedtools intersect -a "$annotation" -b variants.snps.vcf.gz -c > ${output_prefix}_gene_variant_counts.tsv
 
 # Mask sequences with low depth or high allele imbalance
 
@@ -223,7 +240,7 @@ print $1 "\t" ($2-1) "\t" $2
 fi
 
 if [[ -n "${allele_balance:-}" ]]; then
-bcftools query -f '%CHROM\t%POS[\t%GT][\t%AD]\n' -s "$sample_base" "mtDNA.snps.vcf.gz" |
+bcftools query -f '%CHROM\t%POS[\t%GT][\t%AD]\n' -s "$sample_base" "variants.snps.vcf.gz" |
 awk -v thresh=$allele_balance -F'\t' '{
 gt = $3
 split($4, ad, ",")
@@ -259,11 +276,10 @@ done
 
 if [[ "$processed_samples" -gt 0 ]]; then
 avg_masked=$((total_masked / processed_samples))
-echo_t "Average masked sites per sample: $avg_masked"
+log "Average masked sites per sample: $avg_masked"
 else
-echo_t "No samples processed"
+log "No samples processed"
 fi
-
 
 
 # Create consensus sequence and extract gene sequences
@@ -274,7 +290,7 @@ bcftools consensus \
 -f "$reference" \
 -s "$sample_base" \
 -m "${output_prefix}_consensus/${sample_base}_mask.bed" \
-mtDNA.snps.vcf.gz \
+variants.snps.vcf.gz \
 > "${output_prefix}_consensus/${sample_base}_full_mt_consensus.fasta"
 
 bedtools getfasta -fi "${output_prefix}_consensus/${sample_base}_full_mt_consensus.fasta" \
@@ -330,7 +346,7 @@ END {print seq}' "${output_prefix}_consensus/${first_sample}_genes_consensus.fas
 seq_len=$(echo -n "$seq" | tr -d '\n' | wc -c)
 
 if [ "$seq_len" -eq 0 ]; then
-echo_t "Warning: gene $gene sequence length is 0 in sample $first_sample"
+log "Warning: gene $gene sequence length is 0 in sample $first_sample"
 exit 1
 fi
 
@@ -367,18 +383,21 @@ ALN_LEN=$(awk '/^[^>]/ {print length($0); exit}' "$concat_sequence")
 LAST_PART=$(tail -n1 "$partition_file" | awk -F"=" '{print $2}' | tr -d ' ' | awk -F"-" '{print $2}')
 
 if [ "$ALN_LEN" -ne "$LAST_PART" ]; then
-    echo_t "ERROR: alignment length ($ALN_LEN) does not match last partition end ($LAST_PART). Please report this bug."
+    log "ERROR: alignment length ($ALN_LEN) does not match last partition end ($LAST_PART). Please report this bug."
     exit 1
 fi
 
 GENOME_LEN=$(awk '!/^>/ {total += length($0)} END {print total}' "$reference")
 PERCENTAGE=$(awk -v u="$ALN_LEN" -v g="$GENOME_LEN" 'BEGIN {printf "%.2f", (u/g)*100}')
 
-echo_t "\nAlignment length: $ALN_LEN (${PERCENTAGE}% of genome used)"
+log "\nAlignment length: $ALN_LEN (${PERCENTAGE}% of genome used)"
+
+# snp sites only
+
+run_cmd snp-sites "$concat_sequence" > ${output_prefix}_variants_only_alignment.fa
 
 # Check Ns
 
-N_THRESHOLD=10
 OUTFILE="${output_prefix}_high_missing.tsv"
 
 : > "$OUTFILE"
@@ -423,22 +442,23 @@ END {
 ' "$concat_sequence")
 EOF
 
-echo_t "Average number of Ns: $AVG_N"
+log "Average number of Ns: $AVG_N"
 
 if (( COUNT > 0 )); then
-  echo_t "WARNING: $COUNT samples found with more than $N_THRESHOLD missing sites."
-  echo_t "See $OUTFILE for details"
+  log "WARNING: $COUNT samples found with more than $N_THRESHOLD missing sites."
+  log "See $OUTFILE for details"
 fi
-
 
 # IQTree
 
 mkdir -p ${output_prefix}_tree
 
-iqtree3 -s "$concat_sequence" -p "$partition_file" -m MFP -bb 1000 -T AUTO -pre ${output_prefix}_tree/${output_prefix}_tree
+run_cmd iqtree3 -s "$concat_sequence" -p "$partition_file" -m MFP -bb 1000 -T AUTO -pre ${output_prefix}_tree/${output_prefix}_tree
 
 cp ${output_prefix}_tree/${output_prefix}_tree.treefile ${output_prefix}_tree.treefile
 
-echo_t "Run finished successfully. Find output tree in ${output_prefix}_tree.treefile"
+log "Run finished successfully. Find output tree in ${output_prefix}_tree.treefile"
+
+log "Script finished at $(date)" log
 
 # End of script

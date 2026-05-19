@@ -1,5 +1,8 @@
 # Mitogenes2tree
 
+Note: this repo is currently being updated from an old program (Mitogenes2tree) that was optimised for mitochondria to a new program (Haplophylo) that works for bacteria as well. The scripts all work, but the instructions on github are still outdated.
+
+
 <img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/ff8c5cb7-1123-4dad-9aeb-d0b33f3954d9" />
 Image credit: Laura Jimenez Burney
 
@@ -35,6 +38,8 @@ git clone https://github.com/mmerkin/Mitogenes2tree.git
 cd Mitogenes2tree
 conda env create -f environment.yml
 conda activate mitogenes2tree
+
+conda install bioconda::snp-sites # A new tool that was recently added to cope with the visualisation of very large bacterial alignments. The conda environment will be updated later.
 ```
 ## Running
 

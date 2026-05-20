@@ -151,7 +151,7 @@ log "\nBegin analysis"
 # Find samples
 
 mkdir -p ${output_prefix}_consensus
-
+mkdir -p ${output_prefix}_variants
 
 cols=$(awk 'NR>1 {print NF; exit}' "$sample_file")
 
@@ -203,19 +203,20 @@ bcftools call \
 --ploidy 1 \
 -mv \
 -Oz \
--o "variants.raw.vcf.gz"
-run_cmd bcftools index variants.raw.vcf.gz
+-o "${output_prefix}_variants/${output_prefix}_variants.raw.vcf.gz"
+
+run_cmd bcftools index ${output_prefix}_variants/${output_prefix}_variants.raw.vcf.gz
 
 # Remove indels
-run_cmd bcftools view -v snps -Oz -o variants.snps.vcf.gz variants.raw.vcf.gz
-run_cmd bcftools index variants.snps.vcf.gz
+run_cmd bcftools view -v snps -Oz -o ${output_prefix}_variants/${output_prefix}_variants.snps.vcf.gz ${output_prefix}_variants/${output_prefix}_variants.raw.vcf.gz
+run_cmd bcftools index ${output_prefix}_variants/${output_prefix}_variants.snps.vcf.gz
 
-snp_count=$(bcftools view -H variants.snps.vcf.gz | wc -l)
+snp_count=$(bcftools view -H ${output_prefix}_variants/${output_prefix}_variants.snps.vcf.gz | wc -l)
 log "Called $snp_count SNPs"
 
 # Make gene counts output file
 
-run_cmd bedtools intersect -a "$annotation" -b variants.snps.vcf.gz -c > ${output_prefix}_gene_variant_counts.tsv
+run_cmd bedtools intersect -a "$annotation" -b ${output_prefix}_variants/${output_prefix}_variants.snps.vcf.gz -c > ${output_prefix}_gene_variant_counts.tsv
 
 # Mask sequences with low depth or high allele imbalance
 
@@ -236,7 +237,7 @@ print $1 "\t" ($2-1) "\t" $2
 fi
 
 if [[ -n "${allele_balance:-}" ]]; then
-bcftools query -f '%CHROM\t%POS[\t%GT][\t%AD]\n' -s "$input_path/$sample_base" "variants.snps.vcf.gz" |
+bcftools query -f '%CHROM\t%POS[\t%GT][\t%AD]\n' -s "$input_path/$sample" "${output_prefix}_variants/${output_prefix}_variants.snps.vcf.gz" |
 awk -v thresh=$allele_balance -F'\t' '{
 gt = $3
 split($4, ad, ",")
@@ -282,14 +283,14 @@ fi
 
 for sample in "${SAMPLES[@]}"; do
 sample_base=$(basename "$sample" .bam)
-bcftools consensus \
+run_cmd bcftools consensus \
 -f "$reference" \
--s "$input_path/$sample_base" \
+-s "$input_path/$sample" \
 -m "${output_prefix}_consensus/${sample_base}_mask.bed" \
-variants.snps.vcf.gz \
+${output_prefix}_variants/${output_prefix}_variants.snps.vcf.gz \
 > "${output_prefix}_consensus/${sample_base}_full_mt_consensus.fasta"
 
-bedtools getfasta -fi "${output_prefix}_consensus/${sample_base}_full_mt_consensus.fasta" \
+run_cmd bedtools getfasta -fi "${output_prefix}_consensus/${sample_base}_full_mt_consensus.fasta" \
 -bed "$annotation" -nameOnly -fo - | \
 awk -v sample="$sample_base" 'BEGIN{RS=">"; ORS=""} NR>1 {
 split($0, lines, "\n")

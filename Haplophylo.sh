@@ -137,7 +137,7 @@ run_cmd() {
 print_banner
 
 log "Script started at $(date)" log
-log "Starting run of Mitogenes2tree\nPlease report any errors as an issue on github\n"
+log "Starting run of Haplophylo\nPlease report any errors as an issue on github\n"
 log "Reference: $reference"
 log "Annotation file: $annotation"
 log "Input path: $input_path"
@@ -180,15 +180,11 @@ done
 
 
 BAMS=""
-> readgroup_map.txt
 for sample in "${SAMPLES[@]}"; do
     bam="$input_path/$sample"
     if [ -f "$bam" ]; then
         BAMS="$BAMS $bam"
     fi
-    sample_base=$(basename "$sample" .bam)
-    RG=$(samtools view -H $bam | grep '^@RG'| sed -n 's/.*SM:\([^[:space:]]*\).*/\1/p')
-    echo -e "$RG $sample_base" >> readgroup_map.txt
 done
 
 if [ -z "$BAMS" ]; then
@@ -199,7 +195,7 @@ fi
 run_cmd bcftools mpileup \
 -f "$reference" \
 -q $MQ -Q $BQ \
--G readgroup_map.txt \
+--ignore-RG \
 -a AD,DP \
 -Ou \
 $BAMS | \
@@ -240,7 +236,7 @@ print $1 "\t" ($2-1) "\t" $2
 fi
 
 if [[ -n "${allele_balance:-}" ]]; then
-bcftools query -f '%CHROM\t%POS[\t%GT][\t%AD]\n' -s "$sample_base" "variants.snps.vcf.gz" |
+bcftools query -f '%CHROM\t%POS[\t%GT][\t%AD]\n' -s "$input_path/$sample_base" "variants.snps.vcf.gz" |
 awk -v thresh=$allele_balance -F'\t' '{
 gt = $3
 split($4, ad, ",")
@@ -288,7 +284,7 @@ for sample in "${SAMPLES[@]}"; do
 sample_base=$(basename "$sample" .bam)
 bcftools consensus \
 -f "$reference" \
--s "$sample_base" \
+-s "$input_path/$sample_base" \
 -m "${output_prefix}_consensus/${sample_base}_mask.bed" \
 variants.snps.vcf.gz \
 > "${output_prefix}_consensus/${sample_base}_full_mt_consensus.fasta"
